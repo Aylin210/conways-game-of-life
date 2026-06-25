@@ -1,0 +1,122 @@
+# UML-klassediagram
+
+Je kunt deze PlantUML-code plakken in een PlantUML-viewer of in IntelliJ met een PlantUML-plugin.
+
+```plantuml
+@startuml
+skinparam classAttributeIconSize 0
+
+package "nl.aylin.gameoflife.model" {
+  enum CellType {
+    CONWAY
+    ALTERNATIVE
+  }
+
+  class Position {
+    - int row
+    - int column
+    + Position(row: int, column: int)
+    + getRow(): int
+    + getColumn(): int
+    + neighborAt(rowOffset: int, columnOffset: int): Position
+  }
+
+  abstract class Cell {
+    - Position position
+    - CellType type
+    + Cell(position: Position, type: CellType)
+    + getPosition(): Position
+    + getType(): CellType
+    + withPosition(position: Position): Cell
+  }
+
+  class ConwayCell {
+    + ConwayCell(position: Position)
+    + withPosition(position: Position): Cell
+  }
+
+  class AlternativeCell {
+    + AlternativeCell(position: Position)
+    + withPosition(position: Position): Cell
+  }
+
+  class CellFactory {
+    + create(type: CellType, position: Position): Cell
+  }
+
+  class GameBoard {
+    - int rows
+    - int columns
+    - Map<Position, Cell> cells
+    - CellRule conwayRule
+    - CellRule alternativeRule
+    + addCell(type: CellType, position: Position): void
+    + removeCell(position: Position): void
+    + getCell(position: Position): Optional<Cell>
+    + countCells(type: CellType): long
+    + countLivingNeighbors(position: Position): int
+    + nextGeneration(): void
+  }
+}
+
+package "nl.aylin.gameoflife.rules" {
+  interface CellRule {
+    + getCellType(): CellType
+    + survives(livingNeighbors: int): boolean
+    + isBorn(sameTypeNeighbors: int): boolean
+  }
+
+  class ConwayRule
+  class AlternativeRule
+}
+
+package "nl.aylin.gameoflife.clock" {
+  interface TickListener {
+    + onTick(tickNumber: long): void
+  }
+
+  class GameClock {
+    - long tickNumber
+    - int delayMillis
+    - List<TickListener> subscribers
+    + start(): void
+    + pause(): void
+    + resume(): void
+    + addSubscriber(listener: TickListener): void
+    + removeSubscriber(listener: TickListener): void
+    + faster(): void
+    + slower(): void
+  }
+}
+
+package "nl.aylin.gameoflife.ui" {
+  class GameOfLifeFrame
+  class GamePanel
+  enum ToolMode
+}
+
+Cell <|-- ConwayCell
+Cell <|-- AlternativeCell
+Cell "1" *-- "1" Position
+CellFactory ..> Cell
+CellFactory ..> CellType
+CellFactory ..> Position
+GameBoard "1" o-- "0..*" Cell
+GameBoard ..> Position
+GameBoard "1" --> "2" CellRule
+CellRule <|.. ConwayRule
+CellRule <|.. AlternativeRule
+GameClock "1" o-- "0..*" TickListener
+GameOfLifeFrame ..|> TickListener
+GameOfLifeFrame --> GameClock
+GameOfLifeFrame --> GameBoard
+GamePanel --> GameBoard
+
+@enduml
+```
+
+## Patterns
+
+- Observer pattern: `GameClock` beheert meerdere `TickListener`-subscribers en roept `onTick` aan.
+- Strategy pattern: `GameBoard` gebruikt `CellRule`-implementaties voor de Conway- en alternatieve celregels.
+- Factory pattern: `CellFactory` maakt het juiste concrete celobject bij een `CellType`.
