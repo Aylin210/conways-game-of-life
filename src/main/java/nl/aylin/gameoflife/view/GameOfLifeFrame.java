@@ -36,7 +36,9 @@ public class GameOfLifeFrame extends JFrame {
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout());
         add(createToolbar(), BorderLayout.NORTH);
-        add(new JScrollPane(gamePanel), BorderLayout.CENTER);
+
+        JScrollPane scrollPane = new JScrollPane(gamePanel);
+        add(scrollPane, BorderLayout.CENTER);
 
         // Als het venster sluit, stoppen we ook de klok.
         addWindowListener(new WindowAdapter() {
@@ -48,6 +50,11 @@ public class GameOfLifeFrame extends JFrame {
         setSize(1000, 750);
         setLocationRelativeTo(null);
         updateStatus();
+
+        SwingUtilities.invokeLater(() -> scrollPane.getViewport().setViewPosition(new java.awt.Point(
+                Math.max(0, (gamePanel.getPreferredSize().width - scrollPane.getViewport().getWidth()) / 2),
+                Math.max(0, (gamePanel.getPreferredSize().height - scrollPane.getViewport().getHeight()) / 2)
+        )));
     }
 
     private JPanel createToolbar() {
