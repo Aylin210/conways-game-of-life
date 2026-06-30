@@ -26,8 +26,8 @@ Selecteer daarna deze map:
   - Conway-cel: exact 3 Conway-buren.
   - Alternatieve cel: exact 4 alternatieve buren.
 - Als op een lege plek beide geboortevoorwaarden tegelijk gelden, krijgt de alternatieve cel voorrang.
-- De `GameClock` gebruikt het Observer pattern via `TickListener`.
-- De celregels gebruiken het Strategy pattern via `CellRule`.
+- De `GameClock` stuurt elke tick naar alle `TickListener`-listeners.
+- `CellRule`, `ConwayRule` en `AlternativeRule` houden de regeltests los en simpel.
 
 ## Bediening
 

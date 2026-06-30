@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.EnumMap;
+import java.util.Map;
+import nl.aylin.gameoflife.rules.AlternativeRule;
+import nl.aylin.gameoflife.rules.CellRule;
 import org.junit.jupiter.api.Test;
 
 class GameBoardTest {
@@ -125,5 +129,35 @@ class GameBoardTest {
         assertTrue(board.getCell(new Position(5, 5)).isPresent());
         assertTrue(board.getCell(new Position(5, 6)).isPresent());
         assertEquals(3, board.getLivingCellCount());
+    }
+
+    @Test
+    void boardCanUseInjectedRules() {
+        // Arrange: deze test injecteert expres een andere Conway-regel.
+        // Zo bewijzen we dependency injection, polymorfisme en het Strategy pattern.
+        Map<CellType, CellRule> rules = new EnumMap<>(CellType.class);
+        rules.put(CellType.CONWAY, new CellRule() {
+            @Override
+            public boolean survives(int livingNeighbors) {
+                return livingNeighbors == 1;
+            }
+
+            @Override
+            public boolean isBorn(int sameTypeNeighbors) {
+                return sameTypeNeighbors == 2;
+            }
+        });
+        rules.put(CellType.ALTERNATIVE, new AlternativeRule());
+
+        GameBoard board = new GameBoard(10, 10, rules);
+        Position birthPosition = new Position(5, 5);
+        board.addCell(CellType.CONWAY, new Position(5, 4));
+        board.addCell(CellType.CONWAY, new Position(5, 6));
+
+        // Act
+        board.nextGeneration();
+
+        // Assert: met de normale ConwayRule zou dit niet geboren worden.
+        assertEquals(CellType.CONWAY, board.getCell(birthPosition).get().getType());
     }
 }

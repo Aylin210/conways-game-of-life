@@ -2,6 +2,7 @@ package nl.aylin.gameoflife.model;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -18,22 +19,31 @@ public class GameBoard {
 
     private final int rows;
     private final int columns;
-    // Alleen levende cellen worden opgeslagen. Lege vakjes hoeven geen object te zijn.
+    private final Map<CellType, CellRule> rules;
+
+    // Dit is het hele speelveld.
+    // We slaan alleen levende cellen op. Dode cellen staan dus niet in deze map.
+    // Key = positie op het bord, value = de cel die daar leeft.
     private final Map<Position, Cell> cells = new HashMap<>();
-    private final CellFactory cellFactory = new CellFactory();
-    private final CellRule conwayRule = new ConwayRule();
-    private final CellRule alternativeRule = new AlternativeRule();
 
     public GameBoard() {
         this(DEFAULT_ROWS, DEFAULT_COLUMNS);
     }
 
     public GameBoard(int rows, int columns) {
+        this(rows, columns, defaultRules());
+    }
+
+    public GameBoard(int rows, int columns, Map<CellType, CellRule> rules) {
         if (rows <= 0 || columns <= 0) {
             throw new IllegalArgumentException("Het bord moet minimaal 1 rij en 1 kolom hebben.");
         }
+        if (!rules.keySet().containsAll(List.of(CellType.CONWAY, CellType.ALTERNATIVE))) {
+            throw new IllegalArgumentException("Voor elk celtype moet een regel bestaan.");
+        }
         this.rows = rows;
         this.columns = columns;
+        this.rules = new EnumMap<>(rules);
     }
 
     public synchronized int getRows() {
@@ -46,8 +56,9 @@ public class GameBoard {
 
     public synchronized void addCell(CellType type, Position position) {
         validateInsideBoard(position);
-        // Als er al een cel staat, wordt die vervangen door het gekozen type.
-        cells.put(position, cellFactory.create(type, position));
+
+        // Als hier al een cel stond, wordt die gewoon vervangen.
+        cells.put(position, new Cell(position, type));
     }
 
     public synchronized void removeCell(Position position) {
@@ -55,12 +66,10 @@ public class GameBoard {
     }
 
     public synchronized Optional<Cell> getCell(Position position) {
+        // Optional betekent: misschien staat hier een cel, misschien niet.
         return Optional.ofNullable(cells.get(position));
     }
 
-    public synchronized boolean isAlive(Position position) {
-        return cells.containsKey(position);
-    }
 
     public synchronized long countCells(CellType type) {
         return cells.values().stream()
@@ -73,7 +82,8 @@ public class GameBoard {
     }
 
     public synchronized List<Cell> getCellsSnapshot() {
-        // De GUI krijgt een veilige kopie, zodat tekenen en aanpassen elkaar niet storen.
+        // De GUI tekent met een kopie van de lijst.
+        // Zo kan de echte map niet per ongeluk veranderd worden tijdens het tekenen.
         return Collections.unmodifiableList(new ArrayList<>(cells.values()));
     }
 
@@ -90,90 +100,108 @@ public class GameBoard {
     }
 
     public synchronized void nextGeneration() {
-        // Nieuwe generatie wordt eerst apart opgebouwd, zodat oude cellen elkaar niet direct aanpassen.
-        Map<Position, Cell> nextCells = new HashMap<>();
-        for (Position candidate : collectCandidates()) {
-            Cell currentCell = cells.get(candidate);
-            int livingNeighbors = countNeighbors(candidate, null);
+        // We bouwen eerst een nieuwe map.
+        // Pas aan het einde vervangen we het oude bord.
+        // Anders zouden cellen elkaar tijdens het berekenen al beinvloeden.
+        Map<Position, Cell> nextRound = new HashMap<>();
 
-            if (currentCell != null) {
-                // Levende cel: controleer met de regels van zijn eigen type of hij overleeft.
-                CellRule rule = ruleFor(currentCell.getType());
-                if (rule.survives(livingNeighbors)) {
-                    nextCells.put(candidate, currentCell.withPosition(candidate));
+        for (Position position : findPlacesToCheck()) {
+            Cell cell = cells.get(position);
+            int neighbors = countNeighbors(position, null);
+
+            // Er leeft nu al een cel op deze plek.
+            if (cell != null) {
+                if (cellStaysAlive(cell.getType(), neighbors)) {
+                    nextRound.put(position, cell);
                 }
             } else {
-                // Lege plek: controleer of hier een Conway- of alternatieve cel geboren wordt.
-                Cell bornCell = createBornCell(candidate);
-                if (bornCell != null) {
-                    nextCells.put(candidate, bornCell);
+                // Deze plek is leeg. Misschien wordt hier een nieuwe cel geboren.
+                CellType newType = getNewCellType(position);
+                if (newType != null) {
+                    nextRound.put(position, new Cell(position, newType));
                 }
             }
         }
 
         cells.clear();
-        cells.putAll(nextCells);
+        cells.putAll(nextRound);
     }
 
-    private Cell createBornCell(Position position) {
-        // Bij geboorte tellen we per celtype. Alternatief krijgt voorrang bij een dubbele match.
-        int alternativeNeighbors = countNeighbors(position, CellType.ALTERNATIVE);
-        if (alternativeRule.isBorn(alternativeNeighbors)) {
-            return cellFactory.create(CellType.ALTERNATIVE, position);
+    private boolean cellStaysAlive(CellType type, int livingNeighbors) {
+        // Strategy pattern: GameBoard kent de details van de regel niet.
+        // De juiste CellRule beslist zelf of dit celtype overleeft.
+        return rules.get(type).survives(livingNeighbors);
+    }
+
+    private CellType getNewCellType(Position position) {
+        // Een alternatieve cel wordt geboren met precies 4 alternatieve buren.
+        // Deze check staat expres eerst: alternatief krijgt voorrang bij een dubbele match.
+        if (rules.get(CellType.ALTERNATIVE).isBorn(countNeighbors(position, CellType.ALTERNATIVE))) {
+            return CellType.ALTERNATIVE;
         }
 
-        int conwayNeighbors = countNeighbors(position, CellType.CONWAY);
-        if (conwayRule.isBorn(conwayNeighbors)) {
-            return cellFactory.create(CellType.CONWAY, position);
+        // Een Conway-cel wordt geboren met precies 3 Conway-buren.
+        if (rules.get(CellType.CONWAY).isBorn(countNeighbors(position, CellType.CONWAY))) {
+            return CellType.CONWAY;
         }
 
+        // Geen regel klopt, dus deze plek blijft leeg.
         return null;
-    }
-
-    private CellRule ruleFor(CellType type) {
-        return type == CellType.CONWAY ? conwayRule : alternativeRule;
-    }
-
-    private Set<Position> collectCandidates() {
-        // Alleen levende cellen en hun buren kunnen veranderen in de volgende generatie.
-        Set<Position> candidates = new HashSet<>();
-        for (Position position : cells.keySet()) {
-            candidates.add(position);
-            for (Position neighbor : neighborsOf(position)) {
-                if (isInsideBoard(neighbor)) {
-                    candidates.add(neighbor);
-                }
-            }
-        }
-        return candidates;
     }
 
     private int countNeighbors(Position position, CellType type) {
         int count = 0;
-        for (Position neighbor : neighborsOf(position)) {
-            Cell cell = cells.get(neighbor);
-            // type == null betekent: tel alle levende buren, ongeacht celtype.
-            if (cell != null && (type == null || cell.getType() == type)) {
-                count++;
+
+        // We lopen door de 8 plekken om de cel heen.
+        // rowOffset en columnOffset zijn -1, 0 of 1.
+        for (int rowOffset = -1; rowOffset <= 1; rowOffset++) {
+            for (int columnOffset = -1; columnOffset <= 1; columnOffset++) {
+                // Offset 0,0 is de cel zelf. Die mag niet meetellen als buur.
+                if (rowOffset == 0 && columnOffset == 0) {
+                    continue;
+                }
+
+                Position neighbor = position.neighborAt(rowOffset, columnOffset);
+                Cell cell = cells.get(neighbor);
+
+                // type == null betekent: tel alle levende buren.
+                // Anders tellen we alleen buren van dat ene type.
+                if (cell != null && (type == null || cell.getType() == type)) {
+                    count++;
+                }
             }
         }
         return count;
     }
 
-    private List<Position> neighborsOf(Position position) {
-        // Een cel heeft maximaal 8 buren: horizontaal, verticaal en diagonaal.
-        List<Position> neighbors = new ArrayList<>(8);
+    private Set<Position> findPlacesToCheck() {
+        // Alleen levende cellen en hun buren kunnen veranderen.
+        // Een plek ver weg van alle cellen blijft sowieso dood.
+        Set<Position> positions = new HashSet<>();
+        for (Position position : cells.keySet()) {
+            positions.add(position);
+            addNeighborPlaces(position, positions);
+        }
+        return positions;
+    }
+
+    private void addNeighborPlaces(Position position, Set<Position> positions) {
         for (int rowOffset = -1; rowOffset <= 1; rowOffset++) {
             for (int columnOffset = -1; columnOffset <= 1; columnOffset++) {
-                if (rowOffset != 0 || columnOffset != 0) {
-                    neighbors.add(position.neighborAt(rowOffset, columnOffset));
+                if (rowOffset == 0 && columnOffset == 0) {
+                    continue;
+                }
+
+                Position neighbor = position.neighborAt(rowOffset, columnOffset);
+                if (isInsideBoard(neighbor)) {
+                    positions.add(neighbor);
                 }
             }
         }
-        return neighbors;
     }
 
     private void validateInsideBoard(Position position) {
+        // Een cel mag niet buiten het bord geplaatst worden.
         if (!isInsideBoard(position)) {
             throw new IllegalArgumentException("Positie ligt buiten het bord: " + position);
         }
@@ -184,5 +212,12 @@ public class GameBoard {
                 && position.getRow() < rows
                 && position.getColumn() >= 0
                 && position.getColumn() < columns;
+    }
+
+    private static Map<CellType, CellRule> defaultRules() {
+        Map<CellType, CellRule> rules = new EnumMap<>(CellType.class);
+        rules.put(CellType.CONWAY, new ConwayRule());
+        rules.put(CellType.ALTERNATIVE, new AlternativeRule());
+        return rules;
     }
 }

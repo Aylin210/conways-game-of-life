@@ -3,6 +3,7 @@ package nl.aylin.gameoflife.model;
 import java.util.Objects;
 
 public final class Position {
+    // Rij en kolom samen vertellen waar iets op het bord staat.
     private final int row;
     private final int column;
 
@@ -20,12 +21,14 @@ public final class Position {
     }
 
     public Position neighborAt(int rowOffset, int columnOffset) {
-        // Maakt een buurpositie, bijvoorbeeld linksboven is (-1, -1).
+        // Maak een nieuwe positie naast deze positie.
+        // Bijvoorbeeld: offset (-1, 0) is 1 rij omhoog.
         return new Position(row + rowOffset, column + columnOffset);
     }
 
     @Override
     public boolean equals(Object other) {
+        // Nodig zodat twee Position-objecten met dezelfde rij/kolom als gelijk worden gezien.
         if (this == other) {
             return true;
         }

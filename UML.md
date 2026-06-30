@@ -21,35 +21,20 @@ package "nl.aylin.gameoflife.model" {
     + neighborAt(rowOffset: int, columnOffset: int): Position
   }
 
-  abstract class Cell {
+  class Cell {
     - Position position
     - CellType type
     + Cell(position: Position, type: CellType)
     + getPosition(): Position
     + getType(): CellType
-    + withPosition(position: Position): Cell
-  }
-
-  class ConwayCell {
-    + ConwayCell(position: Position)
-    + withPosition(position: Position): Cell
-  }
-
-  class AlternativeCell {
-    + AlternativeCell(position: Position)
-    + withPosition(position: Position): Cell
-  }
-
-  class CellFactory {
-    + create(type: CellType, position: Position): Cell
   }
 
   class GameBoard {
     - int rows
     - int columns
+    - Map<CellType, CellRule> rules
     - Map<Position, Cell> cells
-    - CellRule conwayRule
-    - CellRule alternativeRule
+    + GameBoard(rows: int, columns: int, rules: Map<CellType, CellRule>)
     + addCell(type: CellType, position: Position): void
     + removeCell(position: Position): void
     + getCell(position: Position): Optional<Cell>
@@ -61,7 +46,6 @@ package "nl.aylin.gameoflife.model" {
 
 package "nl.aylin.gameoflife.rules" {
   interface CellRule {
-    + getCellType(): CellType
     + survives(livingNeighbors: int): boolean
     + isBorn(sameTypeNeighbors: int): boolean
   }
@@ -89,28 +73,44 @@ package "nl.aylin.gameoflife.clock" {
   }
 }
 
-package "nl.aylin.gameoflife.ui" {
-  class GameOfLifeFrame
-  class GamePanel
+package "nl.aylin.gameoflife.controller" {
   enum ToolMode
+
+  class GameController {
+    - GameBoard board
+    - GameClock clock
+    + start(): void
+    + pause(): void
+    + resume(): void
+    + reset(): void
+    + placeCell(type: CellType, position: Position): void
+    + removeCell(position: Position): void
+    + onTick(tickNumber: long): void
+  }
 }
 
-Cell <|-- ConwayCell
-Cell <|-- AlternativeCell
+package "nl.aylin.gameoflife.view" {
+  class GameOfLifeFrame
+  class GamePanel
+}
+
 Cell "1" *-- "1" Position
-CellFactory ..> Cell
-CellFactory ..> CellType
-CellFactory ..> Position
 GameBoard "1" o-- "0..*" Cell
+GameBoard "1" o-- "1..*" CellRule
 GameBoard ..> Position
-GameBoard "1" --> "2" CellRule
 CellRule <|.. ConwayRule
 CellRule <|.. AlternativeRule
 GameClock "1" o-- "0..*" TickListener
-GameOfLifeFrame ..|> TickListener
-GameOfLifeFrame --> GameClock
-GameOfLifeFrame --> GameBoard
+GameController ..|> TickListener
+GameController --> GameClock
+GameController --> GameBoard
+GameController ..> Position
+GameController ..> CellType
+GamePanel --> GameController
 GamePanel --> GameBoard
+GamePanel ..> ToolMode
+GameOfLifeFrame --> GameController
+GameOfLifeFrame --> GamePanel
 
 @enduml
 ```
@@ -118,5 +118,6 @@ GamePanel --> GameBoard
 ## Patterns
 
 - Observer pattern: `GameClock` beheert meerdere `TickListener`-subscribers en roept `onTick` aan.
-- Strategy pattern: `GameBoard` gebruikt `CellRule`-implementaties voor de Conway- en alternatieve celregels.
-- Factory pattern: `CellFactory` maakt het juiste concrete celobject bij een `CellType`.
+- Strategy pattern: `GameBoard` bewaart per `CellType` een `CellRule`; `ConwayRule` en `AlternativeRule` bepalen polymorf welk gedrag geldt.
+- Dependency injection: `GameBoard` kan via de constructor een andere `Map<CellType, CellRule>` krijgen, wat vooral in tests en uitbreidingen handig is.
+- MVC: `model` bewaart en berekent de spelstatus, `view` tekent Swing-schermen, en `controller` vertaalt gebruikersacties/ticks naar model-acties.

@@ -3,6 +3,7 @@ package nl.aylin.gameoflife.model;
 import java.awt.Color;
 
 public enum CellType {
+    // Elk type heeft een kleur en een nette naam voor de gebruiker.
     CONWAY(new Color(40, 105, 210), "Conway"),
     ALTERNATIVE(new Color(214, 83, 72), "Alternatief");
 
@@ -22,4 +23,3 @@ public enum CellType {
         return displayName;
     }
 }
-

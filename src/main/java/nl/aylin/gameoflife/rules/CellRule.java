@@ -1,13 +1,9 @@
 package nl.aylin.gameoflife.rules;
 
-import nl.aylin.gameoflife.model.CellType;
-
 public interface CellRule {
-    CellType getCellType();
-
-    // Strategy pattern: elk celtype bepaalt zelf wanneer het blijft leven.
+    // True betekent: een bestaande cel blijft leven.
     boolean survives(int livingNeighbors);
 
-    // Strategy pattern: elk celtype bepaalt zelf wanneer een nieuwe cel ontstaat.
+    // True betekent: op een lege plek wordt een nieuwe cel geboren.
     boolean isBorn(int sameTypeNeighbors);
 }

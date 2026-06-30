@@ -1,10 +1,11 @@
 package nl.aylin.gameoflife.model;
 
-public abstract class Cell {
+public class Cell {
+    // Een cel weet alleen waar hij staat en welk type hij is.
     private final Position position;
     private final CellType type;
 
-    protected Cell(Position position, CellType type) {
+    public Cell(Position position, CellType type) {
         this.position = position;
         this.type = type;
     }
@@ -16,7 +17,4 @@ public abstract class Cell {
     public CellType getType() {
         return type;
     }
-
-    public abstract Cell withPosition(Position position);
 }
-

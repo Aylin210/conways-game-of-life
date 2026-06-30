@@ -11,50 +11,61 @@ public class GameClock {
     private static final int MIN_DELAY_MILLIS = 50;
     private static final int MAX_DELAY_MILLIS = 2000;
 
-    // Observer pattern: listeners abonneren zich en krijgen bij elke tick een melding.
-    private final List<TickListener> subscribers = new CopyOnWriteArrayList<>();
+    // Iedereen in deze lijst krijgt een seintje wanneer de klok tikt.
+    private final List<TickListener> listeners = new CopyOnWriteArrayList<>();
+
+    // Deze twee objecten zorgen ervoor dat tickOnce automatisch herhaald wordt.
     private ScheduledExecutorService executor;
     private ScheduledFuture<?> task;
+
+    // tickNumber is hoeveel stappen de simulatie al heeft gedaan.
     private long tickNumber;
+
+    // Hoe lager dit getal, hoe sneller de simulatie loopt.
     private int delayMillis = 500;
 
     public synchronized void start() {
-        // Start begint opnieuw bij tick 0.
+        // Start begint altijd opnieuw bij tick 0.
         tickNumber = 0;
         startScheduler();
     }
 
     public synchronized void pause() {
+        // Pauze stopt de automatische ticks, maar bewaart het ticknummer.
         stopScheduler();
     }
 
     public synchronized void resume() {
+        // Hervat alleen als de klok nu niet loopt.
         if (!isRunning()) {
             startScheduler();
         }
     }
 
     public synchronized void stop() {
+        // Stop is sterker dan pauze: ook de teller gaat terug naar 0.
         stopScheduler();
         tickNumber = 0;
     }
 
     public synchronized void faster() {
+        // Twee keer zo snel, maar nooit sneller dan MIN_DELAY_MILLIS.
         delayMillis = Math.max(MIN_DELAY_MILLIS, delayMillis / 2);
         restartIfRunning();
     }
 
     public synchronized void slower() {
+        // Twee keer zo langzaam, maar nooit langzamer dan MAX_DELAY_MILLIS.
         delayMillis = Math.min(MAX_DELAY_MILLIS, delayMillis * 2);
         restartIfRunning();
     }
 
     public void addSubscriber(TickListener listener) {
-        subscribers.add(listener);
+        listeners.add(listener);
     }
 
     public void removeSubscriber(TickListener listener) {
-        subscribers.remove(listener);
+        listeners.remove(listener);
     }
 
     public synchronized long getTickNumber() {
@@ -72,34 +83,43 @@ public class GameClock {
     public void tickOnce() {
         long currentTick;
         synchronized (this) {
-            // Eerst ticknummer verhogen, daarna alle subscribers informeren.
+            // Eerst de teller verhogen.
             tickNumber++;
             currentTick = tickNumber;
         }
-        for (TickListener subscriber : subscribers) {
-            subscriber.onTick(currentTick);
+
+        // Daarna iedereen vertellen dat er een tick was.
+        for (TickListener listener : listeners) {
+            listener.onTick(currentTick);
         }
     }
 
     private void startScheduler() {
+        // Eerst oude timer stoppen, zodat er nooit twee timers tegelijk lopen.
         stopScheduler();
-        // ScheduledExecutorService laat automatisch elke delayMillis een tick uitvoeren.
+
+        // Vanaf nu wordt tickOnce elke delayMillis milliseconden aangeroepen.
         executor = Executors.newSingleThreadScheduledExecutor();
         task = executor.scheduleAtFixedRate(this::tickOnce, delayMillis, delayMillis, TimeUnit.MILLISECONDS);
     }
 
     private void stopScheduler() {
+        // Stop de herhalende taak.
         if (task != null) {
             task.cancel(false);
             task = null;
         }
+
+        // Stop ook de thread die de taak uitvoerde.
         if (executor != null) {
             executor.shutdownNow();
             executor = null;
         }
     }
 
-    private synchronized void restartIfRunning() {
+    private void restartIfRunning() {
+        // Als de snelheid verandert terwijl de klok loopt,
+        // moeten we opnieuw starten met de nieuwe delay.
         if (isRunning()) {
             startScheduler();
         }
